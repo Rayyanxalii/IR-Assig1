@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>const API = 'http://127.0.0.1:5000';</script>
+  <title>Boolean IR — Trump Speeches</title>
+  <meta name="description" content="Boolean Information Retrieval system for querying 56 Trump speech documents using AND, OR, NOT and proximity operators." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            navy: {
+              950: '#060b18',
+              900: '#0a1628',
+              800: '#0f2040',
+              700: '#162a52',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { background-color: #060b18; }
+    .card-hover { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+    .card-hover:hover { border-color: #6366f1; box-shadow: 0 0 0 1px #6366f133; }
+    .spinner {
+      border: 2px solid #1e293b;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      width: 20px; height: 20px;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .chip {
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .chip:hover { background: #312e81; color: #a5b4fc; }
+    #queryInput:focus { outline: none; box-shadow: 0 0 0 2px #6366f155; }
+    .result-tag { font-size: 0.68rem; }
+  </style>
+</head>
+
+<body class="min-h-full text-slate-300 font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-navy-900 bg-opacity-80 sticky top-0 z-10 backdrop-blur-sm">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center text-white text-xs font-bold select-none">IR</div>
+        <span class="text-sm font-medium text-slate-200">Boolean IR System</span>
+        <span class="hidden sm:inline text-slate-600">·</span>
+        <span class="hidden sm:inline text-xs text-slate-500">Trump Speeches · 56 documents</span>
+      </div>
+
+    </div>
+  </header>
+
+
+
+  <!-- Main Content -->
+  <main class="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-24">
+
+    <!-- Search Heading -->
+    <div class="text-center mb-10">
+      <h1 class="text-2xl font-semibold text-slate-100 mb-2">Search Speeches</h1>
+      <p class="text-sm text-slate-500">Query 56 Trump speeches using Boolean or proximity operators</p>
+    </div>
+
+    <!-- Query Type Toggle -->
+    <div class="flex justify-center mb-4">
+      <div class="inline-flex bg-slate-900 border border-slate-700 rounded-lg p-0.5 gap-0.5">
+        <button id="tabBoolean" onclick="setMode('boolean')"
+          class="tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white">
+          Boolean
+        </button>
+        <button id="tabProximity" onclick="setMode('proximity')"
+          class="tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors text-slate-400 hover:text-slate-200">
+          Proximity
+        </button>
+      </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="relative mb-3">
+      <input
+        id="queryInput"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="trump AND america AND great"
+        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-5 py-4 font-mono text-base text-slate-100 placeholder-slate-600 transition-shadow"
+        onkeydown="if(event.key==='Enter') doSearch()"
+      />
+      <button
+        id="searchBtn"
+        onclick="doSearch()"
+        class="absolute right-3 top-1/2 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+      >
+        <span id="btnLabel">Search</span>
+        <span id="btnSpinner" class="hidden spinner"></span>
+      </button>
+    </div>
+
+    <!-- Hint chips -->
+    <div id="hintArea" class="flex flex-wrap gap-2 mb-10 justify-center">
+      <!-- filled by JS based on mode -->
+    </div>
+
+    <!-- Error Banner -->
+    <div id="errorBanner" class="hidden mb-6 bg-red-950 border border-red-800 text-red-300 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <span id="errorMsg">Something went wrong.</span>
+    </div>
+
+    <!-- Results Header -->
+    <div id="resultsHeader" class="hidden flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-slate-400">Results for</span>
+        <code id="resultsQuery" class="text-sm font-mono text-indigo-300 bg-slate-900 px-2 py-0.5 rounded"></code>
+      </div>
+      <span id="resultsCount" class="text-sm text-slate-500"></span>
+    </div>
+
+    <!-- Results List -->
+    <div id="resultsList" class="flex flex-wrap gap-2"></div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-16">
+      <div class="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center mx-auto mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <p class="text-sm text-slate-500">No documents matched your query.</p>
+      <p class="text-xs text-slate-600 mt-1">Try different terms or operators.</p>
+    </div>
+
+    <!-- Skeleton Loader -->
+    <div id="skeleton" class="hidden space-y-2">
+      <div class="h-16 bg-slate-900 rounded-xl animate-pulse"></div>
+      <div class="h-16 bg-slate-900 rounded-xl animate-pulse" style="animation-delay:0.1s"></div>
+      <div class="h-16 bg-slate-900 rounded-xl animate-pulse" style="animation-delay:0.2s"></div>
+    </div>
+
+  </main>
+
+  <script>
+    // ---- state ----
+    let mode = 'boolean';
+
+    const hints = {
+      boolean: [
+        'trump AND america',
+        'clinton OR trump',
+        'trump AND wall NOT mexico',
+        'NOT clinton',
+      ],
+      proximity: [
+        'trump america /1',
+        'great america /3',
+        'donald trump /0',
+      ]
+    };
+
+    // ---- init ----
+    renderHints();
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('queryInput').placeholder =
+        m === 'boolean' ? 'trump AND america AND great' : 'trump america /3';
+      document.getElementById('tabBoolean').className =
+        'tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors ' +
+        (m === 'boolean' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200');
+      document.getElementById('tabProximity').className =
+        'tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors ' +
+        (m === 'proximity' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200');
+      renderHints();
+    }
+
+    function renderHints() {
+      const area = document.getElementById('hintArea');
+      area.innerHTML = hints[mode].map(h =>
+        `<button class="chip text-xs font-mono bg-slate-900 border border-slate-700 text-slate-500 px-3 py-1.5 rounded-full"
+          onclick="useHint('${h}')">${h}</button>`
+      ).join('');
+    }
+
+    function useHint(q) {
+      document.getElementById('queryInput').value = q;
+      document.getElementById('queryInput').focus();
+    }
+
+
+
+    // ---- search ----
+    async function doSearch() {
+      const q = document.getElementById('queryInput').value.trim();
+      if (!q) return;
+
+      setLoading(true);
+      clearResults();
+      hideError();
+
+      try {
+        const res = await fetch(API + '/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, type: mode })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || `Server returned ${res.status}`);
+          return;
+        }
+
+        renderResults(q, data);
+
+      } catch (e) {
+        showError('Could not reach the backend. Make sure the server is running on localhost.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function renderResults(q, data) {
+      const results = data.results ?? [];
+      const list = document.getElementById('resultsList');
+      const header = document.getElementById('resultsHeader');
+      const empty = document.getElementById('emptyState');
+
+      document.getElementById('resultsQuery').textContent = q;
+      document.getElementById('resultsCount').textContent =
+        results.length === 0 ? 'No matches' : `${results.length} document${results.length !== 1 ? 's' : ''} matched`;
+      header.classList.remove('hidden');
+      header.classList.add('flex');
+
+      if (results.length === 0) {
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      list.innerHTML = results.map((r, idx) => {
+        const docId = r.doc_id ?? r;
+        const fname = r.filename ?? `Speech ${docId}`;
+        const positions = r.positions ? `<span class="result-tag text-slate-500">positions: ${r.positions.join(', ')}</span>` : '';
+        const terms = r.matched_terms
+          ? r.matched_terms.map(t => `<span class="result-tag bg-indigo-950 text-indigo-300 px-1.5 py-0.5 rounded">${t}</span>`).join(' ')
+          : '';
+
+        return `
+          <div class="card-hover bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-col items-center gap-1.5 cursor-default w-28 text-center">
+            <div class="w-9 h-9 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center">
+              <span class="font-mono text-xs text-indigo-400 font-medium">${docId}</span>
+            </div>
+            <p class="text-xs text-slate-300 w-full truncate">${fname}</p>
+            ${terms ? `<div class="flex flex-wrap gap-1 justify-center">${terms}</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    // ---- ui helpers ----
+    function setLoading(on) {
+      document.getElementById('skeleton').classList.toggle('hidden', !on);
+      document.getElementById('btnSpinner').classList.toggle('hidden', !on);
+      document.getElementById('btnLabel').textContent = on ? 'Searching' : 'Search';
+      document.getElementById('searchBtn').disabled = on;
+    }
+
+    function clearResults() {
+      document.getElementById('resultsList').innerHTML = '';
+      document.getElementById('emptyState').classList.add('hidden');
+      const header = document.getElementById('resultsHeader');
+      header.classList.add('hidden');
+      header.classList.remove('flex');
+    }
+
+    function showError(msg) {
+      document.getElementById('errorMsg').textContent = msg;
+      document.getElementById('errorBanner').classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('errorBanner').classList.add('hidden');
+    }
+  </script>
+
+</body>
+</html>
